@@ -518,15 +518,19 @@ namespace {
         // Загружаем текстуры и создаем материалы
         materials.resize(max_materials);
 
+        // Материал 0 - для пола (нужно добавить!)
+        materials[0].albedo = loadTextureFromPNG(cmd, "./assets/cg.png");
+        if (!materials[0].albedo) materials[0].albedo = missing_texture;
+
         // Материал 1 - для красного куба
         materials[1].albedo = loadTextureFromPNG(cmd, "./assets/image_for_cg1.png");
         if (!materials[1].albedo) materials[1].albedo = missing_texture;
 
-        // Материал 2 - для зеленого куба (камень/металл)
+        // Материал 2 - для зеленого куба
         materials[2].albedo = loadTextureFromPNG(cmd, "./assets/image_for_cg2.png");
         if (!materials[2].albedo) materials[2].albedo = missing_texture;
 
-        // Материал 3 - для синего куба (дерево)
+        // Материал 3 - для синего куба
         materials[3].albedo = loadTextureFromPNG(cmd, "./assets/image_for_cg3.png");
         if (!materials[3].albedo) materials[3].albedo = missing_texture;
 
@@ -577,19 +581,50 @@ namespace {
         // Cube mesh initialization
         {
             std::vector<Vertex> vertices = {
-                    {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}},
-                    {{+0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f}},
-                    {{+0.5f, +0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f}},
-                    {{-0.5f, +0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f}},
-                    // ... остальные вершины куба с текстурными координатами
+                // Front face (z = -0.5)
+                {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}},
+                {{+0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f}},
+                {{+0.5f, +0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f}},
+                {{-0.5f, +0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f}},
+                
+                // Back face (z = +0.5)
+                {{+0.5f, -0.5f, +0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
+                {{-0.5f, -0.5f, +0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}},
+                {{-0.5f, +0.5f, +0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+                {{+0.5f, +0.5f, +0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+                
+                // Right face (x = +0.5)
+                {{+0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+                {{+0.5f, -0.5f, +0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+                {{+0.5f, +0.5f, +0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+                {{+0.5f, +0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+                
+                // Left face (x = -0.5)
+                {{-0.5f, -0.5f, +0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+                {{-0.5f, -0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+                {{-0.5f, +0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}},
+                {{-0.5f, +0.5f, +0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
+                
+                // Top face (y = +0.5)
+                {{-0.5f, +0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+                {{+0.5f, +0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+                {{+0.5f, +0.5f, +0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+                {{-0.5f, +0.5f, +0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
+                
+                // Bottom face (y = -0.5)
+                {{-0.5f, -0.5f, +0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
+                {{+0.5f, -0.5f, +0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f}},
+                {{+0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f}},
+                {{-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 1.0f}},
             };
-            
-            // Для краткости - полное определение куба из вашего кода
-            // (здесь нужно вставить все 24 вершины с UV координатами)
-            
+
             std::vector<uint32_t> indices = {
-                    0,1,2,2,3,0, 4,5,6,6,7,4, 8,9,10,10,11,8,
-                    12,13,14,14,15,12, 16,17,18,18,19,16, 20,21,22,22,23,20
+                0,1,2, 2,3,0,        // front
+                4,5,6, 6,7,4,        // back
+                8,9,10, 10,11,8,     // right
+                12,13,14, 14,15,12,  // left
+                16,17,18, 18,19,16,  // top
+                20,21,22, 22,23,20,  // bottom
             };
 
             cube_mesh.vertex_buffer = new veekay::graphics::Buffer(
@@ -717,15 +752,17 @@ namespace {
         ImGui::End();
 
         // Camera control
+        // Camera control
         {
             using namespace veekay::input;
             if (camera_control) {
                 auto move_delta = mouse::cursorDelta();
-                camera.rotation.y = fmod(2.0f * M_PI + camera.rotation.y + move_delta.x * mouse_sens * 0.02f, 2.0f * M_PI);
-                camera.rotation.x = std::clamp(camera.rotation.x + move_delta.y * mouse_sens * 0.02f, -1.5f, 1.5f);
+                camera.rotation.y += move_delta.x * mouse_sens * 0.02f;  // Убрали fmod
+                camera.rotation.x += -move_delta.y * mouse_sens * 0.02f; // Инвертировали Y для мыши
+                camera.rotation.x = std::clamp(camera.rotation.x, -1.5f, 1.5f);
             }
 
-            veekay::vec3 front = camera.forward();
+            veekay::vec3 front = camera.forward();  // Теперь правильное направление
             veekay::vec3 right = veekay::vec3::normalized(veekay::vec3::cross(front, {0.0f, 1.0f, 0.0f}));
             veekay::vec3 up = {0.0f, 1.0f, 0.0f};
 
@@ -735,12 +772,12 @@ namespace {
             }
 
             float speed = 0.1f;
-            if (keyboard::isKeyDown(keyboard::Key::w)) camera.position += front * speed;
-            if (keyboard::isKeyDown(keyboard::Key::s)) camera.position -= front * speed;
-            if (keyboard::isKeyDown(keyboard::Key::d)) camera.position += right * speed;
-            if (keyboard::isKeyDown(keyboard::Key::a)) camera.position -= right * speed;
-            if (keyboard::isKeyDown(keyboard::Key::q)) camera.position += up * speed;
-            if (keyboard::isKeyDown(keyboard::Key::z)) camera.position -= up * speed;
+            if (keyboard::isKeyDown(keyboard::Key::s)) camera.position += front * speed;   // Вперед
+            if (keyboard::isKeyDown(keyboard::Key::w)) camera.position -= front * speed;   // Назад
+            if (keyboard::isKeyDown(keyboard::Key::d)) camera.position += right * speed;   // Вправо
+            if (keyboard::isKeyDown(keyboard::Key::a)) camera.position -= right * speed;   // Влево
+            if (keyboard::isKeyDown(keyboard::Key::e)) camera.position += up * speed;       // Вверх
+            if (keyboard::isKeyDown(keyboard::Key::q)) camera.position -= up * speed;       // Вниз
         }
 
         // Update uniforms

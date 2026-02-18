@@ -22,7 +22,7 @@ namespace {
     float world_rotation = 0.0f;
 
     //наклон родительского объекта
-    float big_pyramid_tilt = 0.3f;
+    float big_pyramid_tilt = 1.2f;
 
     //масштаб дочернего объекта
     float little_pyramid_scale = 0.3f;
@@ -532,16 +532,16 @@ namespace {
     //функция обновления состояния приложения
     void update(double time) {
         //окно управления
-        ImGui::Begin("CONTROL");
+        ImGui::Begin("Control");
 
         ImGui::Separator();
-        ImGui::Text("LITTLE OBJECT");
+        ImGui::Text("Little pyramid");
         
         //слайдер для масштаба дочернего объекта
-        ImGui::SliderFloat("SCALE", &little_pyramid_scale, 0.1f, 2.0f);
+        ImGui::SliderFloat("Scale", &little_pyramid_scale, 0.1f, 2.0f);
         
         //слайдер для радиуса орбиты дочернего объекта
-        ImGui::SliderFloat("RADIUS", &little_orbit_radius, 0.0f, 5.0f);
+        ImGui::SliderFloat("Radius", &little_orbit_radius, 0.0f, 5.0f);
 
         ImGui::End();
 

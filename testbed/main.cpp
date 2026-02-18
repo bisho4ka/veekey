@@ -10,8 +10,6 @@
 #include <imgui.h>
 #include <vulkan/vulkan_core.h>
 
-#define M_PI 3.1415926535897932384626433832795
-
 namespace {
     //поле зрения камеры
     constexpr float camera_fov = 70.0f;
@@ -23,14 +21,8 @@ namespace {
     //вращение всей системы
     float world_rotation = 0.0f;
 
-    //анимация на паузе
-    bool animation_stopped = false;
-
-    //направление анимации
-    float movement_direction = -1.0f;
-
     //наклон родительского объекта
-    float big_pyramid_tilt = 0.6f;
+    float big_pyramid_tilt = 0.3f;
 
     //масштаб дочернего объекта
     float little_pyramid_scale = 0.3f;
@@ -279,7 +271,7 @@ namespace {
     }
 
     //функция для инициализации графического пайплайна
-    void initialize() {
+    void initialize(VkCommandBuffer cmd) {
         VkDevice &device = veekay::app.vk_device;
 
         VkPhysicalDevice &physical_device = veekay::app.vk_physical_device;
@@ -487,13 +479,13 @@ namespace {
             }
         }
 
-        //создание 3d модели пирамиды
+        //создание 3d модели пирамиды - теперь все вершины белые, цвет будем задавать через push constants
         Vertex vertices[] = {
-                {{-1.0f, -1.0f, 0.0f}, {0.4f, 0.2f, 0.6f}},
-                {{1.0f,  -1.0f, 0.0f}, {0.9f, 0.4f, 0.2f}},
-                {{1.0f,  1.0f,  0.0f}, {1.0f, 0.6f, 0.3f}},
-                {{-1.0f, 1.0f,  0.0f}, {0.8f, 0.9f, 0.4f}},
-                {{0.0f,  0.0f,  2.0f}, {1.0f, 0.9f, 0.7f}}
+                {{-1.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},  // белый
+                {{1.0f,  -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},  // белый
+                {{1.0f,  1.0f,  0.0f}, {1.0f, 0.0f, 0.0f}},  // белый
+                {{-1.0f, 1.0f,  0.0f}, {1.0f, 0.0f, 0.0f}},  // белый
+                {{0.0f,  0.0f,  2.0f}, {1.0f, 0.0f, 0.0f}}   // белый
         };
 
         //определения треугольников пирамиды
@@ -543,35 +535,13 @@ namespace {
         ImGui::Begin("CONTROL");
 
         ImGui::Separator();
-        //текущее направление вращения системы
-        ImGui::Text("WORLD ROTATION");
-        ImGui::Text("WORLD ROTATION: %.2f", world_rotation);
-
-        ImGui::Separator();
-        ImGui::Text("BIG OBJECT");
-
-        //поле ввода позиции родительского объекта
-        ImGui::InputFloat3("POSITION", reinterpret_cast<float *>(&model_position));
-        //слайдер для наклона родительского объекта
-        ImGui::SliderFloat("TILT", &big_pyramid_tilt, -M_PI, M_PI);
-
-        ImGui::Separator();
         ImGui::Text("LITTLE OBJECT");
+        
         //слайдер для масштаба дочернего объекта
         ImGui::SliderFloat("SCALE", &little_pyramid_scale, 0.1f, 2.0f);
-        //слайдер для орбиты дочернего объекта
+        
+        //слайдер для радиуса орбиты дочернего объекта
         ImGui::SliderFloat("RADIUS", &little_orbit_radius, 0.0f, 5.0f);
-
-        ImGui::Separator();
-        ImGui::Text("ANIMATION CONTROL");
-
-        //чекбокс для паузы анимации
-        ImGui::Checkbox("STOP", &animation_stopped);
-        //кнопка для обращения направления анимации
-        if (ImGui::Button("REVERSE MOVEMENT")) {
-            movement_direction *= -1.0f;
-        }
-        ImGui::Text("MOVEMENT: %s", movement_direction > 0 ? "F" : "B");
 
         ImGui::End();
 
@@ -585,9 +555,8 @@ namespace {
         //накопление общего времени анимации
         static double total_time = 0.0;
 
-        if (!animation_stopped) {
-            total_time += delta_time * movement_direction;
-        }
+        // АНИМАЦИЯ ВСЕГДА АКТИВНА (убрана проверка animation_stopped)
+        total_time += delta_time;  // Убрано movement_direction
 
         model_rotation = float(total_time) * speed;
         world_rotation = float(total_time) * world_rotation_speed;
@@ -686,7 +655,7 @@ namespace {
             ShaderConstants big_constants{
                     .projection = m_proj,
                     .transform = world_big,
-                    .color = {0.0f, 0.0f, 0.0f},
+                    .color = {1.0f, 0.0f, 0.0f},
             };
 
             //передаем пуш-константы родительской пирамиды
@@ -720,11 +689,10 @@ namespace {
 
             Matrix world_little = multiply(little_local_transf, stack.back());
 
-            //создаем пуш-константы для дочерней матрицы и отрисовываем ее
+            //создаем пуш-константы для дочерней матрицы
             ShaderConstants little_pyramid_constants{
                     .projection = m_proj,
                     .transform = world_little,
-                    .color = {0.0f, 0.0f, 0.0f},
             };
 
             vkCmdPushConstants(cmd, pipeline_layout,
@@ -742,9 +710,9 @@ namespace {
 
 int main() {
     return veekay::run({
-                               .init = initialize,
-                               .shutdown = shutdown,
-                               .update = update,
-                               .render = render,
-                       });
+        .init = initialize,
+        .shutdown = shutdown,
+        .update = update,
+        .render = render,
+    });
 }

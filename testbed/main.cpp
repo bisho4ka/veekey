@@ -14,14 +14,12 @@
 namespace {
     constexpr uint32_t max_models = 1024;
     constexpr uint32_t max_point_lights = 16;
-    constexpr uint32_t max_spot_lights = 16;
     size_t aligned_sizeof;
 
     float mouse_sens = 0.75f;
     float ambient_light = 0.025f;
     bool camera_control = false;
     bool animate_lights = true;
-    bool use_transform_matrix = false;
 
     struct DirectionalLight {
         veekay::vec3 color = {1.0f, 1.0f, 1.0f};
@@ -38,7 +36,6 @@ namespace {
 
     // scene data structure
     struct SceneUniforms {
-
         // view & projection matrix
         veekay::mat4 view_projection;
 
@@ -58,13 +55,11 @@ namespace {
 
         // count of lights
         uint32_t point_lights_count;
-        uint32_t spot_lights_count;
-        uint32_t _pad4[2];
+        uint32_t _pad4[3];
     };
 
     // model data structure
     struct ModelUniforms {
-
         // matrix from local to world coordinates
         veekay::mat4 model;
 
@@ -81,32 +76,12 @@ namespace {
     };
 
     typedef struct PointLight {
-
         veekay::vec3 position;
-
         // at what distance does the color fade
         float radius;
-
         veekay::vec3 color;
         float _pad0;
-
     } PointLight;
-
-    typedef struct SpotLight {
-
-        veekay::vec3 position;
-
-        // at what distance does the color fade
-        float radius;
-
-        veekay::vec3 direction;
-
-        float angle_cos;
-
-        veekay::vec3 color;
-        float _pad0;
-
-    } SpotLight;
 
     // 3D geometry
     struct Mesh {
@@ -126,7 +101,6 @@ namespace {
 
     // all components in one
     struct Model {
-
         Mesh mesh;
         Transform transform;
 
@@ -150,8 +124,7 @@ namespace {
         float near_plane = default_near_plane;
         float far_plane = default_far_plane;
 
-        // NOTE: View matrix of camera (inverse of a transform)
-        // from world to local coordinates
+        // NOTE: View matrix of camera using Look-At
         veekay::mat4 view() const;
 
         // NOTE: View and projection composition
@@ -159,26 +132,17 @@ namespace {
 
         // NOTE: Get camera forward direction
         veekay::vec3 forward() const;
-
-        // NOTE: View matrix from transform matrix
-        veekay::mat4 view_transform() const;
-
-        // NOTE: Get camera transformation matrix
-        veekay::mat4 transform_matrix() const;
     };
 
     // NOTE: Scene objects
     inline namespace {
-
-        Camera camera
-        {
-                .position = {-0.3f, -2.0f, -3.6f},
-                .rotation = {0.32f, 0.2f, 0.0f}
+        Camera camera {
+            .position = {-0.3f, -2.0f, -3.6f},
+            .rotation = {0.32f, 0.2f, 0.0f}
         };
 
         std::vector<Model> models;
         std::vector<PointLight> point_lights;
-        std::vector<SpotLight> spot_lights;
     }
 
     // NOTE: Vulkan objects
@@ -197,7 +161,6 @@ namespace {
         veekay::graphics::Buffer* model_uniforms_buffer;
 
         veekay::graphics::Buffer* point_lights_buffer;
-        veekay::graphics::Buffer* spot_lights_buffer;
 
         Mesh plane_mesh;
         Mesh cube_mesh;
@@ -213,9 +176,7 @@ namespace {
         return degrees * float(M_PI) / 180.0f;
     }
 
-
     veekay::mat4 Transform::matrix() const {
-
         // scaling
         veekay::mat4 scale_mat = veekay::mat4::scaling(scale);
 
@@ -236,11 +197,9 @@ namespace {
         return translation_mat * rotation_mat * scale_mat;
     }
 
-
     veekay::mat4 look_at_matrix(const veekay::vec3& eye_vtr,
                                 const veekay::vec3& target,
-                                const veekay::vec3& world_y)
-                                {
+                                const veekay::vec3& world_y) {
         // camera axis z
         veekay::vec3 axis_z = veekay::vec3::normalized(eye_vtr - target);
 
@@ -249,13 +208,6 @@ namespace {
 
         // camera axis y
         veekay::vec3 axis_y = veekay::vec3::cross(axis_z, axis_x);
-
-        /* Look-At
-         * [ Rx Ry Rz 0]     [  1  0  0  -Px ]
-         * [ Ux Uy Uz 0]  *  [  0  1  0  -Py ]
-         * [ Dx Dy Dz 0]     [  0  0  1  -Pz ]
-         * [ 0  0  0  1]     [  0  0  0   1  ]
-         * */
 
         veekay::mat4 result_look_at;
         result_look_at[0][0] = axis_x.x;
@@ -301,11 +253,8 @@ namespace {
         return result_forward;
     }
 
-    // calculate camera view matrix
+    // calculate camera view matrix using Look-At
     veekay::mat4 Camera::view() const {
-        if (use_transform_matrix) {
-            return view_transform();
-        }
         // where camera looks now (vector)
         veekay::vec3 forward = Camera::forward();
 
@@ -318,108 +267,13 @@ namespace {
         return look_at_matrix(position, target, up);
     }
 
-    static veekay::mat4 inverted(const veekay::mat4& m) {
-        float inv[16];
-        float det;
-        int i;
-
-        float m0 = m[0][0], m1 = m[0][1], m2 = m[0][2], m3 = m[0][3];
-        float m4 = m[1][0], m5 = m[1][1], m6 = m[1][2], m7 = m[1][3];
-        float m8 = m[2][0], m9 = m[2][1], m10 = m[2][2], m11 = m[2][3];
-        float m12 = m[3][0], m13 = m[3][1], m14 = m[3][2], m15 = m[3][3];
-
-        inv[0] = m5 * m10 * m15 - m5 * m11 * m14 - m9 * m6 * m15 +
-                 m9 * m7 * m14 + m13 * m6 * m11 - m13 * m7 * m10;
-
-        inv[4] = -m4 * m10 * m15 + m4 * m11 * m14 + m8 * m6 * m15 -
-                 m8 * m7 * m14 - m12 * m6 * m11 + m12 * m7 * m10;
-
-        inv[8] = m4 * m9 * m15 - m4 * m11 * m13 - m8 * m5 * m15 +
-                 m8 * m7 * m13 + m12 * m5 * m11 - m12 * m7 * m9;
-
-        inv[12] = -m4 * m9 * m14 + m4 * m10 * m13 + m8 * m5 * m14 -
-                  m8 * m6 * m13 - m12 * m5 * m10 + m12 * m6 * m9;
-
-        inv[1] = -m1 * m10 * m15 + m1 * m11 * m14 + m9 * m2 * m15 -
-                 m9 * m3 * m14 - m13 * m2 * m11 + m13 * m3 * m10;
-
-        inv[5] = m0 * m10 * m15 - m0 * m11 * m14 - m8 * m2 * m15 +
-                 m8 * m3 * m14 + m12 * m2 * m11 - m12 * m3 * m10;
-
-        inv[9] = -m0 * m9 * m15 + m0 * m11 * m13 + m8 * m1 * m15 -
-                 m8 * m3 * m13 - m12 * m1 * m11 + m12 * m3 * m9;
-
-        inv[13] = m0 * m9 * m14 - m0 * m10 * m13 - m8 * m1 * m14 +
-                  m8 * m2 * m13 + m12 * m1 * m10 - m12 * m2 * m9;
-
-        inv[2] = m1 * m6 * m15 - m1 * m7 * m14 - m5 * m2 * m15 +
-                 m5 * m3 * m14 + m13 * m2 * m7 - m13 * m3 * m6;
-
-        inv[6] = -m0 * m6 * m15 + m0 * m7 * m14 + m4 * m2 * m15 -
-                 m4 * m3 * m14 - m12 * m2 * m7 + m12 * m3 * m6;
-
-        inv[10] = m0 * m5 * m15 - m0 * m7 * m13 - m4 * m1 * m15 +
-                  m4 * m3 * m13 + m12 * m1 * m7 - m12 * m3 * m5;
-
-        inv[14] = -m0 * m5 * m14 + m0 * m6 * m13 + m4 * m1 * m14 -
-                  m4 * m2 * m13 - m12 * m1 * m6 + m12 * m2 * m5;
-
-        inv[3] = -m1 * m6 * m11 + m1 * m7 * m10 + m5 * m2 * m11 -
-                 m5 * m3 * m10 - m9 * m2 * m7 + m9 * m3 * m6;
-
-        inv[7] = m0 * m6 * m11 - m0 * m7 * m10 - m4 * m2 * m11 +
-                 m4 * m3 * m10 + m8 * m2 * m7 - m8 * m3 * m6;
-
-        inv[11] = -m0 * m5 * m11 + m0 * m7 * m9 + m4 * m1 * m11 -
-                  m4 * m3 * m9 - m8 * m1 * m7 + m8 * m3 * m5;
-
-        inv[15] = m0 * m5 * m10 - m0 * m6 * m9 - m4 * m1 * m10 +
-                  m4 * m2 * m9 + m8 * m1 * m6 - m8 * m2 * m5;
-
-        det = m0 * inv[0] + m1 * inv[4] + m2 * inv[8] + m3 * inv[12];
-
-        if (det == 0) {
-            return veekay::mat4::identity();
-        }
-
-        det = 1.0f / det;
-
-        veekay::mat4 result;
-        for (i = 0; i < 16; i++) {
-            result[i / 4][i % 4] = inv[i] * det;
-        }
-
-        return result;
-    }
-
     // calculate combined view and projection matrix
     veekay::mat4 Camera::view_projection(float aspect_ratio) const {
-
         auto projection = veekay::mat4::projection(fov, aspect_ratio, near_plane, far_plane);
-
         return view() * projection;
     }
 
-    veekay::mat4 Camera::transform_matrix() const {
-        veekay::mat4 result = veekay::mat4::identity();
-
-        result = veekay::mat4::rotation({0.0f, 1.0f, 0.0f}, rotation.y) * result;
-        result = veekay::mat4::rotation({1.0f, 0.0f, 0.0f}, -rotation.x) * result;
-        result = veekay::mat4::rotation({0.0f, 0.0f, 1.0f}, rotation.z) * result;
-
-
-        result = result * veekay::mat4::translation(position) ;
-
-        return result;
-    }
-
-    veekay::mat4 Camera::view_transform() const {
-        veekay::mat4 camera_transform = transform_matrix();
-        return inverted(camera_transform);
-    }
-
     // NOTE: Loads shader byte code from file
-    // NOTE: Your shaders are compiled via CMake with this code too, look it up
     VkShaderModule loadShaderModule(const char* path) {
         std::ifstream file(path, std::ios::binary | std::ios::ate);
         size_t size = file.tellg();
@@ -435,8 +289,7 @@ namespace {
         };
 
         VkShaderModule result;
-        if (vkCreateShaderModule(veekay::app.vk_device, &
-                info, nullptr, &result) != VK_SUCCESS) {
+        if (vkCreateShaderModule(veekay::app.vk_device, &info, nullptr, &result) != VK_SUCCESS) {
             return nullptr;
         }
 
@@ -469,7 +322,6 @@ namespace {
 
             VkPipelineShaderStageCreateInfo stage_infos[2];
 
-            // NOTE: Vertex shader stage
             stage_infos[0] = VkPipelineShaderStageCreateInfo{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                     .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -477,7 +329,6 @@ namespace {
                     .pName = "main",
             };
 
-            // NOTE: Fragment shader stage
             stage_infos[1] = VkPipelineShaderStageCreateInfo{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                     .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -485,20 +336,18 @@ namespace {
                     .pName = "main",
             };
 
-            // NOTE: How many bytes does a vertex take?
             VkVertexInputBindingDescription buffer_binding{
                     .binding = 0,
                     .stride = sizeof(Vertex),
                     .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
             };
 
-            // NOTE: Declare vertex attributes
             VkVertexInputAttributeDescription attributes[] = {
                     {
-                            .location = 0, // NOTE: First attribute
-                            .binding = 0, // NOTE: First vertex buffer
-                            .format = VK_FORMAT_R32G32B32_SFLOAT, // NOTE: 3-component vector of floats
-                            .offset = offsetof(Vertex, position), // NOTE: Offset of "position" field in a Vertex struct
+                            .location = 0,
+                            .binding = 0,
+                            .format = VK_FORMAT_R32G32B32_SFLOAT,
+                            .offset = offsetof(Vertex, position),
                     },
                     {
                             .location = 1,
@@ -514,7 +363,6 @@ namespace {
                     },
             };
 
-            // NOTE: Describe inputs
             VkPipelineVertexInputStateCreateInfo input_state_info{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
                     .vertexBindingDescriptionCount = 1,
@@ -523,16 +371,11 @@ namespace {
                     .pVertexAttributeDescriptions = attributes,
             };
 
-            // NOTE: Every three vertices make up a triangle,
-            //       so our vertex buffer contains a "list of triangles"
             VkPipelineInputAssemblyStateCreateInfo assembly_state_info{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                     .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
             };
 
-            // NOTE: Declare clockwise triangle order as front-facing
-            //       Discard triangles that are facing away
-            //       Fill triangles, don't draw lines instaed
             VkPipelineRasterizationStateCreateInfo raster_info{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
                     .polygonMode = VK_POLYGON_MODE_FILL,
@@ -541,7 +384,6 @@ namespace {
                     .lineWidth = 1.0f,
             };
 
-            // NOTE: Use 1 sample per pixel
             VkPipelineMultisampleStateCreateInfo sample_info{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
                     .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
@@ -563,18 +405,14 @@ namespace {
                     .extent = {veekay::app.window_width, veekay::app.window_height},
             };
 
-            // NOTE: Let rasterizer draw on the entire window
             VkPipelineViewportStateCreateInfo viewport_info{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-
                     .viewportCount = 1,
                     .pViewports = &viewport,
-
                     .scissorCount = 1,
                     .pScissors = &scissor,
             };
 
-            // NOTE: Let rasterizer perform depth-testing and overwrite depth values on condition pass
             VkPipelineDepthStencilStateCreateInfo depth_info{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
                     .depthTestEnable = true,
@@ -582,7 +420,6 @@ namespace {
                     .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
             };
 
-            // NOTE: Let fragment shader write all the color channels
             VkPipelineColorBlendAttachmentState attachment_info{
                     .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
                                       VK_COLOR_COMPONENT_G_BIT |
@@ -590,13 +427,10 @@ namespace {
                                       VK_COLOR_COMPONENT_A_BIT,
             };
 
-            // NOTE: Let rasterizer just copy resulting pixels onto a buffer, don't blend
             VkPipelineColorBlendStateCreateInfo blend_info{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-
                     .logicOpEnable = false,
                     .logicOp = VK_LOGIC_OP_COPY,
-
                     .attachmentCount = 1,
                     .pAttachments = &attachment_info
             };
@@ -632,7 +466,6 @@ namespace {
                 }
             }
 
-            // NOTE: Descriptor set layout specification
             {
                 VkDescriptorSetLayoutBinding bindings[] = {
                         {
@@ -649,12 +482,6 @@ namespace {
                         },
                         {
                                 .binding = 2,
-                                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                .descriptorCount = 1,
-                                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                        },
-                        {
-                                .binding = 3,
                                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                 .descriptorCount = 1,
                                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -690,14 +517,12 @@ namespace {
                 }
             }
 
-            // NOTE: Declare external data sources, only push constants this time
             VkPipelineLayoutCreateInfo layout_info{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
                     .setLayoutCount = 1,
                     .pSetLayouts = &descriptor_set_layout,
             };
 
-            // NOTE: Create pipeline layout
             if (vkCreatePipelineLayout(device, &layout_info,
                                        nullptr, &pipeline_layout) != VK_SUCCESS) {
                 std::cerr << "Failed to create Vulkan pipeline layout\n";
@@ -720,7 +545,6 @@ namespace {
                     .renderPass = veekay::app.vk_render_pass,
             };
 
-            // NOTE: Create graphics pipeline
             if (vkCreateGraphicsPipelines(device, nullptr,
                                           1, &info, nullptr, &pipeline) != VK_SUCCESS) {
                 std::cerr << "Failed to create Vulkan pipeline\n";
@@ -744,13 +568,6 @@ namespace {
                 nullptr,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 
-        spot_lights_buffer = new veekay::graphics::Buffer(
-                max_spot_lights * sizeof(SpotLight),
-                nullptr,
-                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
-
-
-        // NOTE: This texture and sampler is used when texture could not be loaded
         {
             VkSamplerCreateInfo info{
                     .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -790,11 +607,6 @@ namespace {
                             .offset = 0,
                             .range = max_point_lights * sizeof(PointLight),
                     },
-                    {
-                            .buffer = spot_lights_buffer->buffer,
-                            .offset = 0,
-                            .range = max_spot_lights * sizeof(SpotLight),
-                    },
             };
 
             VkWriteDescriptorSet write_infos[] = {
@@ -825,15 +637,6 @@ namespace {
                             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                             .pBufferInfo = &buffer_infos[2],
                     },
-                    {
-                            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                            .dstSet = descriptor_set,
-                            .dstBinding = 3,
-                            .dstArrayElement = 0,
-                            .descriptorCount = 1,
-                            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                            .pBufferInfo = &buffer_infos[3],
-                    },
             };
 
             vkUpdateDescriptorSets(device, sizeof(write_infos) / sizeof(write_infos[0]),
@@ -842,11 +645,6 @@ namespace {
 
         // NOTE: Plane mesh initialization
         {
-            // (v0)------(v1)
-            //  |  \       |
-            //  |   `--,   |
-            //  |       \  |
-            // (v3)------(v2)
             std::vector<Vertex> vertices = {
                     {{-5.0f, 0.0f, 5.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
                     {{5.0f, 0.0f, 5.0f}, {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f}},
@@ -872,37 +670,26 @@ namespace {
         // NOTE: Cube mesh initialization
         {
             std::vector<Vertex> vertices = {
-
                     {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}},
                     {{+0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}},
                     {{+0.5f, +0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}},
                     {{-0.5f, +0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}},
-
-
                     {{+0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
                     {{+0.5f, -0.5f, +0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
                     {{+0.5f, +0.5f, +0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
                     {{+0.5f, +0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-
-
                     {{+0.5f, -0.5f, +0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
                     {{-0.5f, -0.5f, +0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
                     {{-0.5f, +0.5f, +0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
                     {{+0.5f, +0.5f, +0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}},
-
-
                     {{-0.5f, -0.5f, +0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
                     {{-0.5f, -0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
                     {{-0.5f, +0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
                     {{-0.5f, +0.5f, +0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-
-
                     {{-0.5f, -0.5f, +0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
                     {{+0.5f, -0.5f, +0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
                     {{+0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
                     {{-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}},
-
-
                     {{-0.5f, +0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
                     {{+0.5f, +0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
                     {{+0.5f, +0.5f, +0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
@@ -938,11 +725,9 @@ namespace {
                 .shininess = 32.0f,
         });
 
-
         models.emplace_back(Model {
                 .mesh = cube_mesh,
-                .transform = Transform
-                        {
+                .transform = Transform {
                         .position = {2.0f, -0.5f, -1.0f},
                         .scale = {0.8f, 0.8f, 0.8f},
                         .rotation = {0.0f, M_PI/6.0f, 0.0f},
@@ -954,8 +739,7 @@ namespace {
 
         models.emplace_back(Model {
                 .mesh = cube_mesh,
-                .transform = Transform
-                        {
+                .transform = Transform {
                         .position = {-2.0f, -0.5f, -0.5f},
                         .scale = {0.9f, 0.9f, 0.9f},
                         .rotation = {0.0f, M_PI/4.0f, 0.0f},
@@ -967,8 +751,7 @@ namespace {
 
         models.emplace_back(Model {
                 .mesh = cube_mesh,
-                .transform = Transform
-                        {
+                .transform = Transform {
                         .position = {0.0f, -0.5f, 1.0f},
                 },
                 .albedo_color = {0.92f, 0.85f, 0.95f},
@@ -993,15 +776,7 @@ namespace {
                 .radius = 4.0f,
                 .color = veekay::vec3{0.95f, 0.90f, 1.0f},
         });
-
-        spot_lights.emplace_back(SpotLight {
-                .position = camera.position,
-                .radius = 6.0f,
-                .direction = veekay::vec3::normalized({0.0, 0.5, 0.5}),
-                .angle_cos = cos(toRadians(50.0f)),
-                .color = veekay::vec3{1.0f, 0.98f, 0.96f},
-        });
-    };
+    }
 
 // NOTE: Destroy resources here, do not cause leaks in your program!
     void shutdown() {
@@ -1020,7 +795,6 @@ namespace {
         delete scene_uniforms_buffer;
 
         delete point_lights_buffer;
-        delete spot_lights_buffer;
 
         vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
         vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
@@ -1037,18 +811,10 @@ namespace {
         ImGui::SeparatorText("CAMERA");
         ImGui::Text("camera position: %.2f, %.2f, %.2f",
                     camera.position.x, camera.position.y, camera.position.z);
-
-        ImGui::SeparatorText("CAMERA MATRIX METHOD");
-        ImGui::Checkbox("Use Transform Matrix", &use_transform_matrix);
-        if (use_transform_matrix) {
-            ImGui::Text("Using: Transform Matrix (Inverse)");
-        } else {
-            ImGui::Text("Using: Look-At Matrix");
-        }
+        ImGui::Text("Camera Mode: Look-At Matrix");
 
         ImGui::SeparatorText("VIEW");
         ImGui::Checkbox("animate lights ?", &animate_lights);
-
 
         ImGui::SeparatorText("AMBIENT LIGHT SETTINGS");
         ImGui::SliderFloat("ambient light", &ambient_light, 0.0f, 1.0f);
@@ -1066,7 +832,6 @@ namespace {
 
         ImGui::Text("normalized direction: %.2f, %.2f, %.2f",
                     directional_light.direction.x, directional_light.direction.y, directional_light.direction.z);
-
 
         ImGui::SeparatorText("POINT LIGHT SETTINGS");
         if (ImGui::Button("new point light")) {
@@ -1099,66 +864,20 @@ namespace {
                         break;
                     }
                 }
-
-                ImGui::PopID();
-            }
-        }
-        ImGui::SeparatorText("SPOT LIGHT SETTINGS");
-
-        if (ImGui::Button("new spot light")) {
-            if (spot_lights.size() < max_spot_lights) {
-                SpotLight new_light{
-                        .position = camera.position,
-                        .radius = 10.0f,
-                        .direction = -camera.forward(),
-                        .angle_cos = cos(toRadians(30.0f)),
-                        .color = {1.0f, 0.9f, 0.95f}
-                };
-                spot_lights.push_back(new_light);
-            }
-        }
-
-        if (ImGui::Button("clear spot lights")) {
-            spot_lights.clear();
-        }
-
-        if (!spot_lights.empty()) {
-            ImGui::Separator();
-            for (size_t i = 0; i < spot_lights.size(); ++i) {
-                ImGui::PushID(static_cast<int>(i + 100));
-                if (ImGui::CollapsingHeader(("light " + std::to_string(i)).c_str())) {
-                    SpotLight& light = spot_lights[i];
-                    ImGui::ColorEdit3("color", &light.color.x);
-                    ImGui::SliderFloat3("position", &light.position.x, -10.0f, 10.0f);
-                    ImGui::SliderFloat("radius", &light.radius, 0.1f, 20.0f);
-                    float angle_degrees = acos(light.angle_cos) * 180.0f / M_PI;
-                    if (ImGui::SliderFloat("angle", &angle_degrees, 1.0f, 89.0f)) {
-                        light.angle_cos = cos(toRadians(angle_degrees));
-                    }
-                    if (ImGui::Button("erase")) {
-                        spot_lights.erase(spot_lights.begin() + i);
-                        ImGui::PopID();
-                        break;
-                    }
-                }
                 ImGui::PopID();
             }
         }
         ImGui::End();
 
-
         {
             using namespace veekay::input;
             if (camera_control) {
-
                 auto move_delta = mouse::cursorDelta();
 
                 camera.rotation.y = fmod(2.0f * M_PI + camera.rotation.y + move_delta.x * mouse_sens * 0.02f, 2.0f * M_PI);
                 camera.rotation.x = fmod(camera.rotation.x + move_delta.y * mouse_sens * 0.02f, 2.0f * M_PI);
                 camera.rotation.x = std::clamp(camera.rotation.x, -0.96f * float(M_PI_2), 0.96f * float(M_PI_2));
             }
-
-            auto view = camera.view();
 
             veekay::vec3 right = {0.1f * cos(camera.rotation.y), 0.0f, -0.1f * sin(camera.rotation.y)};
             veekay::vec3 up = {0.0f, -0.1f, 0.0f};
@@ -1188,18 +907,12 @@ namespace {
                 camera.position -= up;
         }
 
-
         if (animate_lights) {
             for (size_t i = 0; i < point_lights.size(); ++i) {
                 point_lights[i].position.x += sinf(time + i * M_PI_4) / 300.0f;
                 point_lights[i].position.z += cosf(time + i * M_PI_4) / 300.0f;
             }
-            for (size_t i = 0; i < spot_lights.size(); ++i) {
-                spot_lights[i].direction.x += sinf(time + i * M_PI_4) / 400.0f;
-                spot_lights[i].direction.z += cosf(time + i * M_PI_4) / 400.0f;
-            }
         }
-
 
         veekay::vec3 sun_direction, sun_color;
         float ambient_level = ambient_light;
@@ -1217,7 +930,6 @@ namespace {
                 .sun_light_direction = sun_direction,
                 .sun_light_color = sun_color,
                 .point_lights_count = static_cast<uint32_t>(point_lights.size()),
-                .spot_lights_count = static_cast<uint32_t>(spot_lights.size())
         };
 
         std::vector<ModelUniforms> model_uniforms(models.size());
@@ -1228,7 +940,6 @@ namespace {
 
             uniforms.model = model.transform.matrix();
             uniforms.albedo_color = model.albedo_color;
-
             uniforms.specular_color = model.specular_color;
             uniforms.shininess = model.shininess;
         }
@@ -1241,28 +952,17 @@ namespace {
             std::memcpy(base + i * aligned_sizeof, &model_uniforms[i], sizeof(ModelUniforms));
         }
 
-        if (point_lights_buffer) {
-            if (!point_lights.empty()) {
-                std::memcpy(point_lights_buffer->mapped_region,
-                            point_lights.data(),
-                            point_lights.size() * sizeof(PointLight));
-            }
-        }
-
-        if (spot_lights_buffer) {
-            if (!spot_lights.empty())
-            {
-                std::memcpy(spot_lights_buffer->mapped_region,
-                            spot_lights.data(),
-                            spot_lights.size() * sizeof(SpotLight));
-            }
+        if (point_lights_buffer && !point_lights.empty()) {
+            std::memcpy(point_lights_buffer->mapped_region,
+                        point_lights.data(),
+                        point_lights.size() * sizeof(PointLight));
         }
     }
 
     void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
         vkResetCommandBuffer(cmd, 0);
 
-        { // NOTE: Start recording rendering commands
+        {
             VkCommandBufferBeginInfo info{
                     .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
                     .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -1271,7 +971,7 @@ namespace {
             vkBeginCommandBuffer(cmd, &info);
         }
 
-        { // NOTE: Use current swapchain framebuffer and clear it
+        {
             VkClearValue clear_color{.color = {{0.1f, 0.1f, 0.1f, 1.0f}}};
             VkClearValue clear_depth{.depthStencil = {1.0f, 0}};
 
@@ -1300,9 +1000,6 @@ namespace {
         VkBuffer current_vertex_buffer = VK_NULL_HANDLE;
         VkBuffer current_index_buffer = VK_NULL_HANDLE;
 
-        const size_t model_uniorms_alignment =
-                veekay::graphics::Buffer::structureAlignment(sizeof(ModelUniforms));
-
         for (size_t i = 0, n = models.size(); i < n; ++i) {
             const Model& model = models[i];
             const Mesh& mesh = model.mesh;
@@ -1329,7 +1026,6 @@ namespace {
     }
 
 } // namespace
-
 
 int main() {
     std::srand(time(nullptr));

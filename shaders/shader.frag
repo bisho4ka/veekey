@@ -1,19 +1,10 @@
 #version 450
 
-struct PointLight {
-    vec3 position;
-    float radius;
-    vec3 color;
-    float _pad00;
-};
+// --- Текстуры (Material Set 1) ---
+layout (set = 1, binding = 0) uniform sampler2D u_albedo_texture;
 
-layout (location = 0) in vec3 f_position;
-layout (location = 1) in vec3 f_normal;
-layout (location = 2) in vec2 f_uv;
-
-layout (location = 0) out vec4 final_color;
-
-layout(binding = 0, std140) uniform SceneUniforms {
+// --- Данные сцены (Scene Set 0) ---
+layout(set = 0, binding = 0, std140) uniform SceneUniforms {
     mat4 view_projection;
     vec3 view_position;
     float _pad0;
@@ -27,7 +18,7 @@ layout(binding = 0, std140) uniform SceneUniforms {
     uint _pad4[3];
 } scene;
 
-layout (binding = 1, std140) uniform ModelUniforms {
+layout(set = 0, binding = 1, std140) uniform ModelUniforms {
     mat4 model;
     vec3 albedo_color;
     float _pad10;
@@ -37,64 +28,68 @@ layout (binding = 1, std140) uniform ModelUniforms {
     uint _pad13[3];
 } model;
 
-layout(binding = 2, std430) readonly buffer PointLights {
-    PointLight point_lights[];
-};
+// Точечные света - ИСПРАВЛЕНО: правильный синтаксис для массива структур
+layout(set = 0, binding = 2, std430) readonly buffer PointLights {
+    vec3 position;
+    float radius;
+    vec3 color;
+    float _pad0;
+} point_lights[];
 
-vec3 BlinnPhong(vec3 lightDirection, vec3 normal, vec3 viewDirection, vec3 lightColor) {
-    // diffuse component
-    float diff = max(dot(normal, lightDirection), 0.0);
+// --- Входные данные из вершинного шейдера ---
+layout (location = 0) in vec3 f_position;
+layout (location = 1) in vec3 f_normal;
+layout (location = 2) in vec2 f_uv;
+
+layout (location = 0) out vec4 final_color;
+
+// --- Вспомогательные функции ---
+vec3 BlinnPhong(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 lightColor) {
+    float diff = max(dot(normal, lightDir), 0.0);
     vec3 diffuse = diff * model.albedo_color * lightColor;
 
-    // specular component (Blinn-Phong)
-    vec3 halfwayDirection = normalize(lightDirection + viewDirection);
-    float spec = pow(max(dot(normal, halfwayDirection), 0.0), model.shininess);
+    vec3 halfwayDir = normalize(lightDir + viewDir);
+    float spec = pow(max(dot(normal, halfwayDir), 0.0), model.shininess);
     vec3 specular = spec * model.specular_color * lightColor;
 
     return diffuse + specular;
 }
 
-// attenuation for point light (inverse square law)
 float CalculatePointLightAttenuation(float distance, float radius) {
     float t = distance / radius;
-    return (1.0 - t) * (1.0 - t); // quadratic attenuation
+    return (1.0 - t) * (1.0 - t);
 }
 
-// sunlight by Blinn-Phong
-vec3 CalculateSunLight(vec3 normal, vec3 viewDirection) {
-    vec3 sunLightDirection = normalize(-scene.sun_light_direction);
-    return BlinnPhong(sunLightDirection, normal, viewDirection, scene.sun_light_color);
-}
-
-// point light by Blinn-Phong
-vec3 CalculatePointLight(PointLight light, vec3 normal, vec3 viewDirection) {
-    vec3 lightDirection = normalize(light.position - f_position);
-    float distance = length(light.position - f_position);
-
-    if (distance > light.radius) {
-        return vec3(0.0);
-    }
-
-    float attenuation = CalculatePointLightAttenuation(distance, light.radius);
-    vec3 lighting = BlinnPhong(lightDirection, normal, viewDirection, light.color);
-
-    return lighting * attenuation;
-}
-
+// --- Главная функция ---
 void main() {
+    // 1. Цвет из текстуры
+    vec4 textureColor = texture(u_albedo_texture, f_uv);
+    
+    // 2. Нормаль и направление взгляда
     vec3 normal = normalize(f_normal);
-    vec3 viewDirection = normalize(scene.view_position - f_position);
+    vec3 viewDir = normalize(scene.view_position - f_position);
 
-    // ambient component
-    vec3 resultLight = model.albedo_color * scene.ambient_light_intensity;
+    // 3. Базовый рассеянный свет
+    vec3 result = textureColor.rgb * scene.ambient_light_intensity;
 
-    // sunlight (directional light)
-    resultLight += CalculateSunLight(normal, viewDirection);
+    // 4. Направленный свет
+    vec3 sunDir = normalize(-scene.sun_light_direction);
+    result += BlinnPhong(sunDir, normal, viewDir, scene.sun_light_color) * textureColor.rgb;
 
-    // point lights
+    // 5. Точечные света
     for (uint i = 0u; i < scene.point_lights_count; i++) {
-        resultLight += CalculatePointLight(point_lights[i], normal, viewDirection);
+        vec3 lightPos = point_lights[i].position;
+        float radius = point_lights[i].radius;
+        vec3 lightColor = point_lights[i].color;
+
+        vec3 lightDir = normalize(lightPos - f_position);
+        float distance = length(lightPos - f_position);
+
+        if (distance < radius) {
+            float attenuation = CalculatePointLightAttenuation(distance, radius);
+            result += BlinnPhong(lightDir, normal, viewDir, lightColor) * textureColor.rgb * attenuation;
+        }
     }
 
-    final_color = vec4(resultLight, 1.0);
+    final_color = vec4(result, 1.0);
 }

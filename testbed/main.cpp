@@ -758,7 +758,7 @@ namespace {
             if (camera_control) {
                 auto move_delta = mouse::cursorDelta();
                 camera.rotation.y += move_delta.x * mouse_sens * 0.02f;  // Убрали fmod
-                camera.rotation.x += -move_delta.y * mouse_sens * 0.02f; // Инвертировали Y для мыши
+                camera.rotation.x += move_delta.y * mouse_sens * 0.02f; // Инвертировали Y для мыши
                 camera.rotation.x = std::clamp(camera.rotation.x, -1.5f, 1.5f);
             }
 

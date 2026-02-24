@@ -79,7 +79,8 @@ namespace {
         // at what distance does the color fade
         float radius;
         veekay::vec3 color;
-        float _pad0;
+        float ambient_intensity;
+        float _pad0[3];
     } PointLight;
 
     // 3D geometry
@@ -193,36 +194,37 @@ namespace {
     veekay::mat4 look_at_matrix(const veekay::vec3& eye_vtr,
                                 const veekay::vec3& target,
                                 const veekay::vec3& world_y) {
-        // camera axis z
-        veekay::vec3 axis_z = veekay::vec3::normalized(eye_vtr - target);
-
+        // camera axis z - направление взгляда (от камеры к цели)
+        // В правой системе координат камера смотрит в направлении -Z
+        veekay::vec3 axis_z = veekay::vec3::normalized(eye_vtr - target);  // ВОЗВРАЩАЕМ ОБРАТНО!
+        
         // camera axis x
         veekay::vec3 axis_x = veekay::vec3::normalized(veekay::vec3::cross(world_y, axis_z));
-
+        
         // camera axis y
         veekay::vec3 axis_y = veekay::vec3::cross(axis_z, axis_x);
-
+        
         veekay::mat4 result_look_at;
         result_look_at[0][0] = axis_x.x;
         result_look_at[0][1] = axis_y.x;
         result_look_at[0][2] = axis_z.x;
         result_look_at[0][3] = 0.0f;
-
+        
         result_look_at[1][0] = axis_x.y;
         result_look_at[1][1] = axis_y.y;
         result_look_at[1][2] = axis_z.y;
         result_look_at[1][3] = 0.0f;
-
+        
         result_look_at[2][0] = axis_x.z;
         result_look_at[2][1] = axis_y.z;
         result_look_at[2][2] = axis_z.z;
         result_look_at[2][3] = 0.0f;
-
+        
         result_look_at[3][0] = -veekay::vec3::dot(axis_x, eye_vtr);
         result_look_at[3][1] = -veekay::vec3::dot(axis_y, eye_vtr);
         result_look_at[3][2] = -veekay::vec3::dot(axis_z, eye_vtr);
         result_look_at[3][3] = 1.0f;
-
+        
         return result_look_at;
     }
 
@@ -815,6 +817,7 @@ namespace {
                 if (ImGui::CollapsingHeader(("light " + std::to_string(i)).c_str())) {
                     PointLight& light = point_lights[i];
                     ImGui::ColorEdit3("color", &light.color.x);
+                    ImGui::SliderFloat("ambient intensity", &light.ambient_intensity, 0.0f, 1.0f);
                     ImGui::SliderFloat3("position", &light.position.x, -10.0f, 10.0f);
                     ImGui::SliderFloat("radius", &light.radius, 0.1f, 20.0f);
                     if (ImGui::Button("erase")) {

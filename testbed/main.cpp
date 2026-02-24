@@ -693,6 +693,7 @@ namespace {
             ShaderConstants little_pyramid_constants{
                     .projection = m_proj,
                     .transform = world_little,
+                    .color = {0.0f, 0.0f, 1.0f},
             };
 
             vkCmdPushConstants(cmd, pipeline_layout,

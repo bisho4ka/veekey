@@ -18,6 +18,8 @@ void main() {
     vec4 transformed = transform * point;
     vec4 projected = projection * transformed;
 
+    frag_color = color; 
+    
     //устанавливаем позицию в специальную переменную
     gl_Position = projected;
     frag_color = v_color;

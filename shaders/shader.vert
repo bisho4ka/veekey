@@ -2,11 +2,9 @@
 
 layout (location = 0) in vec3 v_position;
 layout (location = 1) in vec3 v_normal;
-layout (location = 2) in vec2 v_uv;
 
 layout (location = 0) out vec3 f_position;
 layout (location = 1) out vec3 f_normal;
-layout (location = 2) out vec2 f_uv;
 
 layout (binding = 0, std140) uniform SceneUniforms {
     mat4 view_projection;
@@ -42,5 +40,4 @@ void main() {
     
     f_position = position.xyz;
     f_normal = world_normal_mat;
-    f_uv = v_uv;  // UV не нужны для 2 лабы, но можно оставить
 }

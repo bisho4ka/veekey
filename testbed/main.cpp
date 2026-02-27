@@ -30,7 +30,7 @@ bool camera_control = false;
 struct DirectionalLight {
     veekay::vec3 color = {1.0f, 1.0f, 1.0f};
     float intensity = 0.5f;
-    veekay::vec3 direction = {0.15f, -1.0f, 0.3f};
+    veekay::vec3 direction = {0.15f, 1.0f, 0.3f};
 };
 
 DirectionalLight directional_light;
@@ -1032,7 +1032,7 @@ void update(double time) {
     ImGui::ColorEdit3("color", &directional_light.color.x);
     ImGui::SliderFloat3("direction", &directional_light.direction.x, -1.0f, 1.0f);
     if (ImGui::Button("reset")) {
-        directional_light.direction = {0.15f, -1.0f, 0.3f};
+        directional_light.direction = {0.15f, 1.0f, 0.3f};
     }
     directional_light.direction = veekay::vec3::normalized(directional_light.direction);
     
@@ -1090,7 +1090,7 @@ void update(double time) {
         if (keyboard::isKeyDown(keyboard::Key::q)) camera.position -= up * speed;
     }
     
-    veekay::vec3 lightDir = veekay::vec3::normalized(directional_light.direction);
+    veekay::vec3 lightDir = veekay::vec3::normalized(-directional_light.direction);
     veekay::vec3 sceneCenter = {0.0f, 0.0f, 0.0f};
     
     // Light view matrix
@@ -1210,7 +1210,7 @@ void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     
     // Основной рендер pass (без изменений)
-    VkClearValue clear_color{.color = {{0.1f, 0.1f, 0.3f, 1.0f}}};
+    VkClearValue clear_color{.color = {{0.1f, 0.1f, 0.1f, 1.0f}}};
     VkClearValue clear_depth{.depthStencil = {1.0f, 0}};
     VkClearValue clear_values[] = {clear_color, clear_depth};
     

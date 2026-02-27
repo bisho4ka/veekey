@@ -51,22 +51,17 @@ layout (location = 0) out vec4 final_color;
 float calculateShadow(vec4 lightSpacePos) {
     vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
     
-    // ✅ Преобразуем ТОЛЬКО X и Y из [-1,1] в [0,1]
     projCoords.xy = projCoords.xy * 0.5 + 0.5;
-    // Z уже в [0,1] для Vulkan — не трогаем!
     
-    // ✅ Добавляем bias для борьбы с self-shadowing
     const float bias = 0.0001;
     projCoords.z -= bias;
     
-    // Проверка границ
     if (projCoords.z > 1.0 || projCoords.z < 0.0 || 
         projCoords.x < 0.0 || projCoords.x > 1.0 || 
         projCoords.y < 0.0 || projCoords.y > 1.0) {
-        return 1.0; // вне карты теней = нет тени
+        return 1.0;
     }
     
-    // ✅ Сэмплируем с учётом bias
     float shadow = texture(shadowMap, projCoords);
     return shadow;
 }

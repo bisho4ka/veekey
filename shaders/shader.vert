@@ -9,29 +9,29 @@ layout (location = 1) out vec3 f_normal;
 layout (binding = 0, std140) uniform SceneUniforms {
     mat4 view_projection;
     vec3 view_position;
-    float _pad0;                    // ВАЖНО!
+    float _pad0;
     vec3 ambient_light_intensity;
-    float _pad1;                     // ВАЖНО!
+    float _pad1;
     vec3 sun_light_direction;
-    float _pad2;                     // ВАЖНО!
+    float _pad2;
     vec3 sun_light_color;
-    float _pad3;                     // ВАЖНО!
+    float _pad3;
     uint point_lights_count;
-    uint _pad4[3];                   // ВАЖНО!
+    uint _pad4[3];
 } scene;
 
 layout (binding = 1, std140) uniform ModelUniforms {
     mat4 model;
     vec3 albedo_color;
-    float _pad10;                    // Из вашей структуры!
+    float _pad10;
     vec3 specular_color;
-    float _pad12;                    // Из вашей структуры!
+    float _pad12;
     float shininess;
-    uint _pad13[3];                  // Из вашей структуры!
+    uint _pad13[3];
 } model;
 
 void main() {
-    vec4 position = model.model * vec4(v_position, 1.0f);  // model.model, а не просто model!
+    vec4 position = model.model * vec4(v_position, 1.0f);
     
     mat3 normal_mat = transpose(inverse(mat3(model.model)));
     vec3 world_normal_mat = normalize(normal_mat * v_normal);

@@ -1,6 +1,5 @@
 #version 450
 
-// интерполированный цвет
 layout (location = 0) in vec3 frag_color;
 
 // NOTE: Pixel color

@@ -20,7 +20,6 @@ void main() {
 
     frag_color = color; 
     
-    //устанавливаем позицию в специальную переменную
     gl_Position = projected;
     frag_color = v_color;
 }

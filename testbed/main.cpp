@@ -740,7 +740,7 @@ void render(VkCommandBuffer cmd, VkFramebuffer framebuffer) {
     };
     vkBeginCommandBuffer(cmd, &begin_info);
     
-    VkClearValue clear_color{.color = {{0.1f, 0.1f, 0.3f, 1.0f}}};
+    VkClearValue clear_color{.color = {{0.1f, 0.1f, 0.1f, 1.0f}}};
     VkClearValue clear_depth{.depthStencil = {1.0f, 0}};
     VkClearValue clear_values[] = {clear_color, clear_depth};
     

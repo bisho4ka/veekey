@@ -65,7 +65,9 @@ vec3 BlinnPhong(vec3 lightDir, vec3 normal, vec3 viewDir, vec3 lightColor, vec3 
 // Аттенюация для точечных источников
 float CalculatePointLightAttenuation(float distance, float radius) {
     float t = distance / radius;
-    return (1.0 - t) * (1.0 - t);
+    float invSquare = 1.0 / (distance * distance * 0.3 + 0.7);
+    float smoothFalloff = (1.0 - t) * (1.0 - t);
+    return invSquare * smoothFalloff;
 }
 
 // Направленный свет

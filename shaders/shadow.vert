@@ -2,18 +2,18 @@
 
 layout(location = 0) in vec3 v_position;
 
-layout(push_constant) uniform PushConstants {
+layout(push_constant) uniform Push {
     mat4 light_view_proj;
 } push;
 
 layout(set = 0, binding = 1, std140) uniform ModelUniforms {
     mat4 model;
     vec3 albedo_color;
-    float _pad10;
+    float _pad0;
     vec3 specular_color;
-    float _pad12;
+    float _pad2;
     float shininess;
-    uint _pad13[3];
+    uint _pad3[3];
 } model;
 
 void main() {

@@ -509,47 +509,42 @@ void shutdown() {
 
 void update(double time) {
     ImGui::Begin("Control");
+    ImGui::SeparatorText("Ambient light");
+    ImGui::SliderFloat("ambient", &ambient_light, 0.0f, 1.0f);
     
-    ImGui::SeparatorText("Ambient light settings");
-    ImGui::SliderFloat("ambient light", &ambient_light, 0.0f, 1.0f);
-    
-    ImGui::SeparatorText("Directional light settings");
+    ImGui::SeparatorText("Directional light");
     ImGui::SliderFloat("intensity", &directional_light.intensity, 0.0f, 2.0f);
     ImGui::ColorEdit3("color", &directional_light.color.x);
     ImGui::SliderFloat3("direction", &directional_light.direction.x, -1.0f, 1.0f);
-    if (ImGui::Button("reset direction")) {
+    if (ImGui::Button("reset")) {
         directional_light.direction = {0.15f, 1.0f, 0.3f};
     }
     directional_light.direction = veekay::vec3::normalized(directional_light.direction);
     
-    ImGui::SeparatorText("Point light settings");
-    if (ImGui::Button("new point light")) {
+    ImGui::SeparatorText("Point lights");
+    if (ImGui::Button("new light")) {
         if (point_lights.size() < max_point_lights) {
-            point_lights.push_back({camera.position, 5.0f, {1.0f, 0.9f, 0.95f}, 0.0f});
+            point_lights.push_back({camera.position, 5.0f, {1.0f, 0.9f, 0.95f}});
         }
     }
-    
-    if (ImGui::Button("clear point lights")) {
+    if (ImGui::Button("clear all")) {
         point_lights.clear();
     }
-    if (!point_lights.empty()) {
-        ImGui::Separator();
-        for (size_t i = 0; i < point_lights.size(); ++i) {
-            ImGui::PushID(static_cast<int>(i));
-            if (ImGui::CollapsingHeader(("light " + std::to_string(i)).c_str())) {
-                PointLight& light = point_lights[i];
-                ImGui::ColorEdit3("color", &light.color.x);
-                // Убрано поле ambient_intensity
-                ImGui::SliderFloat3("position", &light.position.x, -10.0f, 10.0f);
-                ImGui::SliderFloat("radius", &light.radius, 0.1f, 20.0f);
-                if (ImGui::Button("erase")) {
-                    point_lights.erase(point_lights.begin() + i);
-                    ImGui::PopID();
-                    break;
-                }
+    
+    for (size_t i = 0; i < point_lights.size(); ++i) {
+        ImGui::PushID(i);
+        if (ImGui::CollapsingHeader(("light " + std::to_string(i)).c_str())) {
+            PointLight& light = point_lights[i];
+            ImGui::ColorEdit3("color", &light.color.x);
+            ImGui::SliderFloat3("position", &light.position.x, -10.0f, 10.0f);
+            ImGui::SliderFloat("radius", &light.radius, 0.1f, 20.0f);
+            if (ImGui::Button("erase")) {
+                point_lights.erase(point_lights.begin() + i);
+                ImGui::PopID();
+                break;
             }
-            ImGui::PopID();
         }
+        ImGui::PopID();
     }
     ImGui::End();
     
